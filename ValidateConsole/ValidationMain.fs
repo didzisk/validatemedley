@@ -52,6 +52,13 @@ let seniorLimitShouldBeTheSameAsForMeet (m:StevneXml.MeetSetup.MeetSetUp) (e:Ste
                   else
                       Ok e
     
+let finalShouldBeFree (e:StevneXml.MeetSetup.Event)  =
+    if e.Round = "FINAL" then
+        match e.Free with
+        | false -> Error "Finale, bør være gratis (Generelt 2 | Øvelsen skal ikke betales for)"
+        | true  -> Ok e
+    else
+        Ok e
         
 let CheckMeetSetup (targetDir:string) (filename:string) =
     let fullPath = System.IO.Path.Combine [| targetDir; filename |]
@@ -63,6 +70,7 @@ let CheckMeetSetup (targetDir:string) (filename:string) =
             finalRoundShouldOnlyBeOnFinalEvents e
             |> Result.bind finalRoundShouldNotHaveYoungestEldest
             |> Result.bind (seniorLimitShouldBeTheSameAsForMeet currentMeet)
+            |> Result.bind finalShouldBeFree
         e, res
     
     currentMeet.Events
