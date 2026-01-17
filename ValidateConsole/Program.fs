@@ -1,8 +1,7 @@
 ﻿open DownloadUtils
 
-
-//let [<Literal>] stevneFileName = "20251025KolbotnIL_SkiSKRoaldAmundsenCUP.xml"
-let [<Literal>] stevneFileName = "20260228KolbotnIL_SkiSKRoaldAmundsenCUP.xml"
+let [<Literal>] stevneFileName = "20260228Kolbotn_SkiSvOmmingRACUP.xml"
+                                         
 let [<Literal>] targetDir = @"D:\training\StevneMedley"
 
 stevneFileName

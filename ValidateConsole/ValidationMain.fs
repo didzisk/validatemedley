@@ -1,5 +1,8 @@
 module ValidationMain
 
+open System.IO
+open System.Text
+
 let apply fResult xResult =
     match fResult, xResult with
     | Ok f, Ok x ->
@@ -37,6 +40,8 @@ let finalRoundShouldNotHaveYoungestEldest (e:StevneXml.MeetSetup.Event)  =
 let seniorLimitShouldBeTheSameAsForMeet (m:StevneXml.MeetSetup.MeetSetUp) (e:StevneXml.MeetSetup.Event)  =
     if e.Round = "FINAL" then
         Ok e
+    else if (string e.EventLength).Contains("*") then
+             Ok e
     else if e.Sex = "FEMALE" then
              if e.Youngest <> Some m.WomenJunior then
                   Error "Ikke Finale, Yngst må være som i hele stevnet (gjelder ikke stafett)"
@@ -61,9 +66,12 @@ let finalShouldBeFree (e:StevneXml.MeetSetup.Event)  =
         Ok e
         
 let CheckMeetSetup (targetDir:string) (filename:string) =
-    let fullPath = System.IO.Path.Combine [| targetDir; filename |]
-    let text = System.IO.File.ReadAllText fullPath
-    let currentMeet = StevneXml.MeetSetup.Parse text
+    let fullPath = Path.Combine [| targetDir; filename |]
+    
+    let encoding = Encoding.GetEncoding("ISO-8859-1");
+
+    use reader = new StreamReader(fullPath, encoding)
+    let currentMeet = StevneXml.MeetSetup.Load reader
     
     let validationFunc (e:StevneXml.MeetSetup.Event) =
         let res = 
