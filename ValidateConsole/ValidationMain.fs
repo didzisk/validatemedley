@@ -65,6 +65,20 @@ let finalShouldBeFree (e:StevneXml.MeetSetup.Event)  =
     else
         Ok e
         
+let finalAandBShouldHaveDifferentContents (m:StevneXml.MeetSetup.MeetSetUp) (e:StevneXml.MeetSetup.Event)  =
+    if e.Round = "FINAL" then
+        // if another event with the same preliminary event exists, then TypeOfFinal should be different
+        let count =
+            m.Events
+            |> Seq.filter (fun ev -> ev.Preliminaryevent = e.Preliminaryevent && ev.Typeoffinal = e.Typeoffinal)
+            |> Seq.length
+        if count > 1 then
+            Error "A og B finale skal ikke ha samme innhold"
+        else
+            Ok e
+    else
+        Ok e
+        
 let CheckMeetSetup (targetDir:string) (filename:string) =
     let fullPath = Path.Combine [| targetDir; filename |]
     
@@ -78,6 +92,7 @@ let CheckMeetSetup (targetDir:string) (filename:string) =
             finalRoundShouldOnlyBeOnFinalEvents e
             |> Result.bind finalRoundShouldNotHaveYoungestEldest
             |> Result.bind (seniorLimitShouldBeTheSameAsForMeet currentMeet)
+            |> Result.bind (finalAandBShouldHaveDifferentContents currentMeet)
             |> Result.bind finalShouldBeFree
         e, res
     
