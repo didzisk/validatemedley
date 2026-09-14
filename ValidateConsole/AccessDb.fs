@@ -6,22 +6,11 @@ open System
 open System.Data.OleDb
 open System.IO
 
-/// Tried in order. The DbCopy files are Jet 3 (Access 97), which every ACE version
-/// rejects with "Cannot open a database created with a previous version of your
-/// application" - only Jet 4.0 reads them, and only in a 32-bit process.
-let Providers =
-    [ "Microsoft.Jet.OLEDB.4.0"
-      "Microsoft.ACE.OLEDB.16.0"
-      "Microsoft.ACE.OLEDB.12.0" ]
-
-let private tryOpen (dbPath: string) (provider: string) =
-    let conn = new OleDbConnection($"Provider={provider};Data Source={dbPath};Mode=Read")
-    try
-        conn.Open()
-        Ok conn
-    with ex ->
-        conn.Dispose()
-        Error $"{provider}: {ex.Message}"
+/// The Victoria databases are Jet 3 (Access 97). Every ACE version rejects that format
+/// with "Cannot open a database created with a previous version of your application",
+/// so Jet 4.0 is the only option - and it exists only as a 32-bit provider, which is
+/// why this project targets win-x86. An .accdb would need ACE instead.
+let [<Literal>] Provider = "Microsoft.Jet.OLEDB.4.0"
 
 /// Opens the .mdb read-only, so no .ldb lock file is created next to it.
 /// The caller owns the connection - bind it with `use`, or prefer withConnection.
@@ -29,20 +18,18 @@ let openConnection (dbPath: string) =
     if not (File.Exists dbPath) then
         failwithf "Access database not found: %s" dbPath
 
-    let rec attempt tried remaining =
-        match remaining with
-        | [] ->
-            failwithf
-                "Could not open %s with any OLE DB provider (process is %s).\n%s"
-                dbPath
-                (if Environment.Is64BitProcess then "64-bit" else "32-bit")
-                (tried |> List.rev |> String.concat "\n")
-        | provider :: rest ->
-            match tryOpen dbPath provider with
-            | Ok conn -> conn
-            | Error msg -> attempt (msg :: tried) rest
-
-    attempt [] Providers
+    let conn = new OleDbConnection($"Provider={Provider};Data Source={dbPath};Mode=Read")
+    try
+        conn.Open()
+        conn
+    with ex ->
+        conn.Dispose()
+        failwithf
+            "Could not open %s with %s (process is %s; the provider is 32-bit only).\n%s"
+            dbPath
+            Provider
+            (if Environment.Is64BitProcess then "64-bit" else "32-bit")
+            ex.Message
 
 /// Opens once, runs f, always closes. Use this to batch several queries per open.
 let withConnection (dbPath: string) (f: OleDbConnection -> 'a) : 'a =
