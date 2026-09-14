@@ -1,6 +1,6 @@
 ﻿open DownloadUtils
 
-let [<Literal>] stevneFileName = "20260228Kolbotn_SkiSvOmmingRACUP.xml"
+let [<Literal>] stevneFileName = "20260822Kolbotn_SkiSvOmmingRACUPSuperSprintStevne.xml"
                                          
 let [<Literal>] targetDir = @"D:\training\StevneMedley"
 
@@ -18,3 +18,8 @@ let displayFunc (e: StevneXml.MeetSetup.Event, r:Result<StevneXml.MeetSetup.Even
 
 ValidationMain.CheckMeetSetup  targetDir stevneFileName
 |> Seq.iter displayFunc
+
+let [<Literal>] dbDir = @"D:\training\StevneMedley\DbCopy"
+
+for db in [ "person.mdb"; "rekorder.mdb"; "stevne.mdb" ] do
+    AccessDbDump.dumpDatabase (System.IO.Path.Combine(dbDir, db)) 5
