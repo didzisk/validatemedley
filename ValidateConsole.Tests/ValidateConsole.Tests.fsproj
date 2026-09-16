@@ -6,6 +6,9 @@
         <!-- Must match ValidateConsole: it references the 32-bit-only Jet provider. -->
         <RuntimeIdentifier>win-x86</RuntimeIdentifier>
         <SelfContained>false</SelfContained>
+        <!-- xunit v3 runs on Microsoft.Testing.Platform, not VSTest. The opt-in lives in
+             dotnet.config at the repo root; on VSTest `dotnet test` hangs with no adapter. -->
+        <OutputType>Exe</OutputType>
     </PropertyGroup>
 
     <ItemGroup>
@@ -13,7 +16,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
         <PackageReference Include="xunit.v3" Version="4.0.1" />
     </ItemGroup>
 
