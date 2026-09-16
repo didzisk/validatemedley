@@ -30,8 +30,10 @@ let displayDbResult (e: DbValidation.DbEvent, r: Result<DbValidation.DbEvent, st
     | Error errorValue -> errorValue
     |> printfn "%d. %s [%A] %s" e.EventNumber e.Description e.Round
 
+let splits = MeetConfig.load (MeetConfig.defaultPath ())
+
 let meet, dbResults =
-    DbValidation.checkLatestMeetSetup (System.IO.Path.Combine(dbDir, "stevne.mdb"))
+    DbValidation.checkLatestMeetSetup splits (System.IO.Path.Combine(dbDir, "stevne.mdb"))
 
 printfn "=== validation straight from stevne.mdb: %d. %s (%s) ===" meet.Number meet.Name meet.Date
 dbResults |> List.iter displayDbResult

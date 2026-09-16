@@ -1,0 +1,11 @@
+{
+  "_comment": "Meets whose events are split into age bands across sessions. Victoria has nowhere to record the split, so it is configured here. Only meets listed here are validated against a cutoff; every other meet keeps the plain meet-wide age check. cutoffYear is the oldest birth year still in the young band. youngSessions lists the SessionId values that make up the young band - a two-day meet may have several.",
+  "meets": [
+    {
+      "stevnenr": 18,
+      "name": "RA SUPER-SPRINT CUP 2026",
+      "cutoffYear": 2014,
+      "youngSessions": [ 1 ]
+    }
+  ]
+}
