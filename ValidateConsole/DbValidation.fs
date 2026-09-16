@@ -195,6 +195,17 @@ let finalRoundShouldOnlyBeOnFinalEvents (e: DbEvent) =
     else
         Ok e
 
+/// A final inherits its field from the preliminary event, so it must not carry an age class
+/// of its own. Yngsteklasse and Eldsteklasse hold -1 on such events, which reads as None.
+let finalRoundShouldNotHaveYoungestEldest (e: DbEvent) =
+    if e.Round = Final then
+        match e.Youngest, e.Oldest with
+        | Some _, _ -> Error $"{e.EventNumber}. Finale, Yngst er ikke tillatt"
+        | _, Some _ -> Error $"{e.EventNumber}. Finale, Eldst er ikke tillatt"
+        | None, None -> Ok e
+    else
+        Ok e
+
 /// Outside the finals, every individual event must use the meet-wide age span: youngest
 /// equal to the meet's junior year, oldest one year under the senior year. Relays carry no
 /// age class, so they are exempt.
@@ -247,24 +258,55 @@ let seniorLimitShouldBeTheSameAsForMeet (m: Meet) (split: MeetConfig.MeetSplit o
                 else
                     Ok e
 
-let private check (m: Meet) (split: MeetConfig.MeetSplit option) (e: DbEvent) =
+/// The A and B final of the same preliminary event must differ in Finaletype. Two finals
+/// sharing both the preliminary event and the type would be the same race set up twice.
+let finalAandBShouldHaveDifferentContents (events: DbEvent list) (e: DbEvent) =
+    if e.Round = Final then
+        let sameContents =
+            events
+            |> List.filter (fun other ->
+                other.PreliminaryEvent = e.PreliminaryEvent && other.TypeOfFinal = e.TypeOfFinal)
+            |> List.length
+
+        // e itself is in the list, so more than one means a duplicate exists.
+        if sameContents > 1 then
+            Error "A og B finale skal ikke ha samme innhold"
+        else
+            Ok e
+    else
+        Ok e
+
+/// Finals are swum off entries already paid for in the preliminary event, so they must be
+/// marked free - Gratis, which Victoria shows as "Generelt 2 | Øvelsen skal ikke betales for".
+let finalShouldBeFree (e: DbEvent) =
+    if e.Round = Final && not e.Free then
+        Error "Finale, bør være gratis (Generelt 2 | Øvelsen skal ikke betales for)"
+    else
+        Ok e
+
+/// Same order as ValidationMain.validationFunc, so the first failure reported for an event
+/// matches between the XML and database paths.
+let private check (m: Meet) (split: MeetConfig.MeetSplit option) (events: DbEvent list) (e: DbEvent) =
     let result =
         finalRoundShouldOnlyBeOnFinalEvents e
+        |> Result.bind finalRoundShouldNotHaveYoungestEldest
         |> Result.bind (seniorLimitShouldBeTheSameAsForMeet m split)
+        |> Result.bind (finalAandBShouldHaveDifferentContents events)
+        |> Result.bind finalShouldBeFree
 
     e, result
+
+let private checkAll (m: Meet) (split: MeetConfig.MeetSplit option) (events: DbEvent list) =
+    events |> List.map (check m split events)
 
 let checkMeetSetup (splits: Map<int, MeetConfig.MeetSplit>) (dbPath: string) (meetNumber: int) =
     withConnection dbPath (fun conn ->
         match listMeets conn |> List.tryFind (fun m -> m.Number = meetNumber) with
         | None -> failwithf "No meet with Stevnenr %d in Stevnet" meetNumber
-        | Some meet ->
-            let split = splits |> Map.tryFind meetNumber
-            readEvents conn meetNumber |> List.map (check meet split))
+        | Some meet -> readEvents conn meetNumber |> checkAll meet (splits |> Map.tryFind meetNumber))
 
 /// Validates the most recently set up meet, and reports which one that was.
 let checkLatestMeetSetup (splits: Map<int, MeetConfig.MeetSplit>) (dbPath: string) =
     withConnection dbPath (fun conn ->
         let meet = latestMeet conn
-        let split = splits |> Map.tryFind meet.Number
-        meet, readEvents conn meet.Number |> List.map (check meet split))
+        meet, readEvents conn meet.Number |> checkAll meet (splits |> Map.tryFind meet.Number))

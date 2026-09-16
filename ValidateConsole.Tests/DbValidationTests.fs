@@ -229,6 +229,91 @@ let ``relays and finals stay exempt in an age-split meet`` () =
     { validEvent with SessionId = 2; Round = Final; Youngest = Some 2017; Oldest = Some 2014 }
     |> expectOk splitLimit
 
+// ---- finalRoundShouldNotHaveYoungestEldest ----
+
+/// A final as Victoria stores it: age class -1/-1, which reads as None.
+let private final =
+    { validEvent with
+        Round = Final
+        PreliminaryEvent = Some 3
+        Youngest = None
+        Oldest = None
+        Free = true }
+
+[<Fact>]
+let ``a final carrying no age class is accepted`` () =
+    final |> expectOk finalRoundShouldNotHaveYoungestEldest
+
+[<Fact>]
+let ``a final may not set youngest`` () =
+    Assert.Equal(
+        "3. Finale, Yngst er ikke tillatt",
+        expectError finalRoundShouldNotHaveYoungestEldest { final with Youngest = Some 2017 }
+    )
+
+[<Fact>]
+let ``a final may not set oldest`` () =
+    Assert.Equal(
+        "3. Finale, Eldst er ikke tillatt",
+        expectError finalRoundShouldNotHaveYoungestEldest { final with Oldest = Some 2008 }
+    )
+
+[<Fact>]
+let ``non-finals keep their age class`` () =
+    validEvent |> expectOk finalRoundShouldNotHaveYoungestEldest
+
+// ---- finalAandBShouldHaveDifferentContents ----
+
+[<Fact>]
+let ``an A and a B final off the same preliminary event are accepted`` () =
+    let a = { final with EventNumber = 15; TypeOfFinal = 1 }
+    let b = { final with EventNumber = 13; TypeOfFinal = 2 }
+    let events = [ a; b ]
+
+    a |> expectOk (finalAandBShouldHaveDifferentContents events)
+    b |> expectOk (finalAandBShouldHaveDifferentContents events)
+
+[<Fact>]
+let ``two finals with the same preliminary event and type are rejected`` () =
+    let a = { final with EventNumber = 15; TypeOfFinal = 1 }
+    let duplicate = { final with EventNumber = 16; TypeOfFinal = 1 }
+
+    Assert.Equal(
+        "A og B finale skal ikke ha samme innhold",
+        expectError (finalAandBShouldHaveDifferentContents [ a; duplicate ]) a
+    )
+
+[<Fact>]
+let ``finals off different preliminary events may share a type`` () =
+    let a = { final with EventNumber = 15; PreliminaryEvent = Some 3; TypeOfFinal = 1 }
+    let b = { final with EventNumber = 16; PreliminaryEvent = Some 4; TypeOfFinal = 1 }
+
+    a |> expectOk (finalAandBShouldHaveDifferentContents [ a; b ])
+
+[<Fact>]
+let ``duplicate non-finals are not this rule's business`` () =
+    let a = validEvent
+    let b = { validEvent with EventNumber = 4 }
+
+    a |> expectOk (finalAandBShouldHaveDifferentContents [ a; b ])
+
+// ---- finalShouldBeFree ----
+
+[<Fact>]
+let ``a free final is accepted`` () =
+    final |> expectOk finalShouldBeFree
+
+[<Fact>]
+let ``a final that costs money is rejected`` () =
+    Assert.Equal(
+        "Finale, bør være gratis (Generelt 2 | Øvelsen skal ikke betales for)",
+        expectError finalShouldBeFree { final with Free = false }
+    )
+
+[<Fact>]
+let ``non-finals are allowed to cost money`` () =
+    validEvent |> expectOk finalShouldBeFree
+
 // ---- config parsing ----
 
 [<Fact>]
