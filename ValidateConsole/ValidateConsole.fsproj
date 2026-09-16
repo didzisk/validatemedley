@@ -14,6 +14,7 @@
         <Compile Include="AccessDb.fs" />
         <Compile Include="AccessDbSchema.fs" />
         <Compile Include="AccessDbDump.fs" />
+        <Compile Include="DbValidation.fs" />
         <Compile Include="DownloadUtils.fs" />
         <Compile Include="StevneXml.fs" />
         <Compile Include="ValidationMain.fs" />
