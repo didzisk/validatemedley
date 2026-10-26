@@ -284,6 +284,20 @@ let finalShouldBeFree (e: DbEvent) =
     else
         Ok e
 
+/// A final is filled from the preliminary event's result list, so the two must be set up for
+/// the same swimmers. A men's final off a women's heat would draw its field from nobody.
+/// A Forsoksovelse pointing at no event at all is reported rather than passed over, for the
+/// same reason an unresolvable Distansenr is.
+let finalSexShouldMatchPreliminaryEvent (events: DbEvent list) (e: DbEvent) =
+    match e.Round, e.PreliminaryEvent with
+    | Final, Some number ->
+        match events |> List.tryFind (fun other -> other.EventNumber = number) with
+        | None -> Error $"{e.EventNumber}. Forsøksøvelse {number} finnes ikke"
+        | Some prelim when prelim.Sex <> e.Sex ->
+            Error $"Finale, kjønn må være det samme som i forsøksøvelse {number}"
+        | Some _ -> Ok e
+    | _ -> Ok e
+
 /// Same order as ValidationMain.validationFunc, so the first failure reported for an event
 /// matches between the XML and database paths.
 let private check (m: Meet) (split: MeetConfig.MeetSplit option) (events: DbEvent list) (e: DbEvent) =
@@ -293,6 +307,7 @@ let private check (m: Meet) (split: MeetConfig.MeetSplit option) (events: DbEven
         |> Result.bind (seniorLimitShouldBeTheSameAsForMeet m split)
         |> Result.bind (finalAandBShouldHaveDifferentContents events)
         |> Result.bind finalShouldBeFree
+        |> Result.bind (finalSexShouldMatchPreliminaryEvent events)
 
     e, result
 

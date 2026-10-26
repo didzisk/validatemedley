@@ -314,6 +314,51 @@ let ``a final that costs money is rejected`` () =
 let ``non-finals are allowed to cost money`` () =
     validEvent |> expectOk finalShouldBeFree
 
+// ---- finalSexShouldMatchPreliminaryEvent ----
+
+/// The preliminary event that `final` (PreliminaryEvent = Some 3) is swum off.
+let private prelim =
+    { validEvent with
+        EventNumber = 3
+        Round = Preliminary
+        Sex = Female }
+
+[<Fact>]
+let ``a final of the same sex as its preliminary event is accepted`` () =
+    let f = { final with EventNumber = 15; Sex = Female }
+
+    f |> expectOk (finalSexShouldMatchPreliminaryEvent [ prelim; f ])
+
+[<Fact>]
+let ``a final of the other sex than its preliminary event is rejected`` () =
+    let f = { final with EventNumber = 15; Sex = Male }
+
+    Assert.Equal(
+        "Finale, kjønn må være det samme som i forsøksøvelse 3",
+        expectError (finalSexShouldMatchPreliminaryEvent [ prelim; f ]) f
+    )
+
+[<Fact>]
+let ``a final naming a preliminary event that does not exist is reported`` () =
+    let f = { final with EventNumber = 15; PreliminaryEvent = Some 99 }
+
+    Assert.Equal(
+        "15. Forsøksøvelse 99 finnes ikke",
+        expectError (finalSexShouldMatchPreliminaryEvent [ prelim; f ]) f
+    )
+
+[<Fact>]
+let ``a final without a preliminary event is left to the round rule`` () =
+    let f = { final with EventNumber = 15; PreliminaryEvent = None }
+
+    f |> expectOk (finalSexShouldMatchPreliminaryEvent [ prelim; f ])
+
+[<Fact>]
+let ``non-finals may differ in sex from the event they point at`` () =
+    let e = { validEvent with Sex = Male; PreliminaryEvent = Some 3 }
+
+    e |> expectOk (finalSexShouldMatchPreliminaryEvent [ prelim; e ])
+
 // ---- config parsing ----
 
 [<Fact>]

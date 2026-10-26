@@ -79,6 +79,21 @@ let finalAandBShouldHaveDifferentContents (m:StevneXml.MeetSetup.MeetSetUp) (e:S
     else
         Ok e
         
+// A final is filled from the preliminary event's result list, so the two must be set up for
+// the same swimmers. Mirrors DbValidation.finalSexShouldMatchPreliminaryEvent, messages included.
+let finalSexShouldMatchPreliminaryEvent (m:StevneXml.MeetSetup.MeetSetUp) (e:StevneXml.MeetSetup.Event)  =
+    if e.Round = "FINAL" then
+        match e.Preliminaryevent with
+        | None -> Ok e
+        | Some number ->
+            match m.Events |> Seq.tryFind (fun ev -> ev.EventNumber = number) with
+            | None -> Error $"{e.EventNumber}. Forsøksøvelse {number} finnes ikke"
+            | Some prelim when prelim.Sex <> e.Sex ->
+                Error $"Finale, kjønn må være det samme som i forsøksøvelse {number}"
+            | Some _ -> Ok e
+    else
+        Ok e
+
 let CheckMeetSetup (targetDir:string) (filename:string) =
     let fullPath = Path.Combine [| targetDir; filename |]
     
@@ -94,6 +109,7 @@ let CheckMeetSetup (targetDir:string) (filename:string) =
             |> Result.bind (seniorLimitShouldBeTheSameAsForMeet currentMeet)
             |> Result.bind (finalAandBShouldHaveDifferentContents currentMeet)
             |> Result.bind finalShouldBeFree
+            |> Result.bind (finalSexShouldMatchPreliminaryEvent currentMeet)
         e, res
     
     currentMeet.Events

@@ -8,16 +8,53 @@ data in Access databases. Two validation paths exist over the same rules:
 
 ## Commands
 
+Do not call `dotnet` off `PATH` - it raises the enterprise privilege prompt. Use Rider's
+bundled host to build and the built exe to test:
+
 ```
-dotnet build Validate.sln
-dotnet test --project ValidateConsole.Tests\ValidateConsole.Tests.fsproj
-dotnet run --project ValidateConsole
+D:\Tools\Rider\lib\ReSharperHost\windows-x64\dotnet\dotnet.exe build Validate.sln
+ValidateConsole.Tests\bin\Debug\net10.0\win-x86\ValidateConsole.Tests.exe
+D:\Tools\Rider\lib\ReSharperHost\windows-x64\dotnet\dotnet.exe run --project ValidateConsole
 ```
 
-`dotnet test` runs on Microsoft.Testing.Platform (xunit v3). The opt-in is the `test` section
-of `global.json`; without it `dotnet test` starts VSTest, finds no adapter and **hangs**.
-`--nologo` is rejected in this mode (exit code 5). The test project also builds to a runnable
-exe, so `ValidateConsole.Tests\bin\Debug\net10.0\win-x86\ValidateConsole.Tests.exe` works too.
+`dotnet test --project ValidateConsole.Tests\ValidateConsole.Tests.fsproj` works too, against
+either host. Tests run on Microsoft.Testing.Platform (xunit v3). The opt-in is the `test`
+section of `global.json`; without it `dotnet test` starts VSTest, finds no adapter and
+**hangs**. `--nologo` is rejected in this mode (exit code 5).
+
+### Why not `C:\Program Files\dotnet\dotnet.exe`
+
+Every launch of it raises the enterprise privilege prompt - a BeyondTrust/Avecto Defendpoint
+credential dialog that replaces UAC and takes a password only, not Windows Hello. One
+Application event 100 per launch:
+
+```
+Process started with admin rights added to token.
+File Name:         c:\program files\dotnet\dotnet.exe
+Certificate:       .NET      Application Type: msi
+Product Name:      Microsoft.NET.Workloads.10.0.300 (x64)
+Token:             Add Full Admin (Required for Installers)
+Application Group: (Default) Signed UAC Prompt
+```
+
+The token name is the reason: being MSI-registered under `Microsoft.NET.Workloads`, that
+binary is classified as an **installer**, and installers are granted full admin - which needs
+the credential dialog. The rule fires on process creation and keys on the image path, so
+nothing about this project or its file writes affects it. It is not Claude Code's sandbox.
+
+Two images sidestep it, both verified against the Defendpoint log:
+
+- **Rider's bundled host**, `D:\Tools\Rider\lib\ReSharperHost\windows-x64\dotnet\dotnet.exe` -
+  a plain file under `D:\Tools`, not MSI-registered, so the installer rule cannot match. A
+  clean `build --no-incremental` logs seven launches, all `Token: Passive (No Change)`. It
+  carries its own SDK 10.0.301; `global.json` pins no SDK version, so it is free to use it.
+  x64 host, but it cross-builds `win-x86` correctly - the tests pass on its output. This is
+  also why building inside Rider never prompts.
+- **`ValidateConsole.Tests.exe`**, a framework-dependent apphost: it loads `hostfxr`
+  in-process and never spawns `dotnet.exe`. Logs no Defendpoint event at all.
+
+The real fix is an IT policy change: put `dotnet.exe` in a passive workstyle, the way
+`git.exe` already sits in *Add Admin - All Users (Business Apps)* with `Token: Passive`.
 
 ## The project must stay x86
 
@@ -92,6 +129,7 @@ so the two paths stay comparable:
 3. `seniorLimitShouldBeTheSameAsForMeet`
 4. `finalAandBShouldHaveDifferentContents`
 5. `finalShouldBeFree`
+6. `finalSexShouldMatchPreliminaryEvent`
 
 `Validators.fs` still holds six empty stubs that were never implemented on either path.
 

@@ -16,13 +16,14 @@ let displayFunc (e: StevneXml.MeetSetup.Event, r:Result<StevneXml.MeetSetup.Even
     | Error errorValue -> errorValue
     |> (printfn "%d. %s %A" e.EventNumber e.EventDescription)
 
-ValidationMain.CheckMeetSetup  targetDir stevneFileName
-|> Seq.iter displayFunc
+// ValidationMain.CheckMeetSetup  targetDir stevneFileName
+// |> Seq.iter displayFunc
 
-let [<Literal>] dbDir = @"D:\training\StevneMedley\DbCopy"
+//let [<Literal>] dbDir = @"D:\training\StevneMedley\DbCopy"
+let [<Literal>] dbDir = @"D:\Victoria"
 
-for db in [ "person.mdb"; "rekorder.mdb"; "stevne.mdb" ] do
-    AccessDbDump.dumpDatabase (System.IO.Path.Combine(dbDir, db)) 5
+// for db in [ "person.mdb"; "rekorder.mdb"; "stevne.mdb" ] do
+//     AccessDbDump.dumpDatabase (System.IO.Path.Combine(dbDir, db)) 5
 
 let displayDbResult (e: DbValidation.DbEvent, r: Result<DbValidation.DbEvent, string>) =
     match r with
