@@ -84,6 +84,8 @@ no `.ldb` lock files appear.
 | `AccessDbDump.fs` | `render`, `readRows`, `dumpDatabase` - text output only. |
 | `MeetConfig.fs` | Loads `meets.json`. |
 | `DbValidation.fs` | Row types and the validation rules. |
+| `MedleyDommere.fs` | The medley.no dommer register - HTTP and parsing, nothing else. |
+| `DommerParents.fs` | Joins meet entrants to official parents, and prints the report. |
 
 Build typed readers on `AccessDb.query conn sql mapRow`. Keep presentation out of
 `AccessDb`/`AccessDbSchema`.
@@ -132,6 +134,72 @@ so the two paths stay comparable:
 6. `finalSexShouldMatchPreliminaryEvent`
 
 `Validators.fs` still holds six empty stubs that were never implemented on either path.
+
+## Dommerforeldre - swimmers whose parent is an official
+
+`ValidateConsole.exe dommerforeldre [stevnenr]` lists, for one meet, every entrant who shares
+a surname and a club with a registered swim official, together with that official's phone and
+email. The meet number defaults to the most recent. Output is printed only - it is personal
+contact data and must not be written into the repository.
+
+The two halves come from different places:
+
+- **Who is swimming** - `stevne.mdb.Pamelder` (one row per entry, so filter distinct `IDnr`),
+  joined to `person.mdb.Utover` on `Pamelder.IDnr = Utover.Utovernr`, and on to `Klubber`.
+- **Who is an official** - medley.no only. `Utover` *has* `Dommer`, `Dommertype`, `Intdommer`
+  and `AutorisertTil` columns, and `stevne.mdb` has a `Dommer` table, but in a club
+  installation they are all empty. The register exists only centrally.
+
+**Club numbering is not shared.** Kolbotn IL is `Klubbnr` 75 in `person.mdb` and combo value
+73 on medley. Clubs are therefore matched by *name*, with the name-to-id map read out of the
+page at runtime. A club whose name medley does not recognise is reported, never skipped
+silently - a silent miss is indistinguishable from "this club has no officials".
+
+Surnames are compared token by token, split on spaces and hyphens, because the two registers
+disagree about compound names - a swimmer recorded as "Strøm Fredriksen" may have a parent
+listed as plain "Fredriksen". An official with the swimmer's exact first *and* last name is
+dropped: that is the swimmer, who is often an official too.
+
+### medley.no's wire protocol, decoded
+
+`dommeroversikt.aspx` is WebForms hosting a DevExpress `ASPxGridView`. None of this is
+documented; it was read off the wire with chrome-devtools MCP. Two facts shape the client:
+
+- The grid binds **only on the first GET**. Any ordinary postback - even one carrying nothing
+  but `__VIEWSTATE`, `__VIEWSTATEGENERATOR`, `__EVENTVALIDATION` and an empty `__EVENTTARGET`
+  - returns "Ingen data å vise". Everything must go through DevExpress callbacks.
+- Callbacks are stateful. Each one must echo back the row keys and the `callbackState` from
+  the response before it, or the server answers `'generalError'` with HTTP 200.
+
+A callback posts `__CALLBACKID` = the grid's UniqueID and `__CALLBACKPARAM`:
+
+```
+c0:KV|<n>;["1_35737",...];FR|1;0;GB|<n>;<command>;
+```
+
+`<n>` is the value's character count and the server validates it. The commands:
+
+| Command | Raised by |
+|---|---|
+| `14|CUSTOMCALLBACK0|` | club/discipline combo - rebinds to the current `cmb*_VI` values |
+| `13|SHOWDETAILROW7|<key>` | a row's `[Utvid]` button - expands the detail panel |
+| `12|PAGERONCLICK3|PN<i>` | the bottom pager |
+
+The leading number identifies the control that raised it, so it differs per command. Rows are
+addressed by **key** (`<gren>_<personid>`), not by visible index.
+
+One field is easy to miss: `ctl00$ctl00$Content$MainContent$grdDommere` carries a ~20 KB grid
+state blob and is **not** a hidden input in the HTML - DevExpress injects it at post time.
+Its `callbackState` is in the page's grid init script. Without it every callback returns an
+empty grid, which is what makes this look unscrapeable at first.
+
+Responses are `<len>|<refreshed __EVENTVALIDATION>` followed by
+`/*DX*/({'result':{'html':'...'}})`, with the HTML JS-escaped.
+
+Filtering by club avoids paging entirely - the unfiltered grid is 1198 officials over 12
+pages, one club fits on a single page. Worth keeping that way: `PN<i>` indexes *visible*
+pager buttons, not absolute pages, and chained pager callbacks fail where club-filter →
+expand chains fine.
 
 ### Age-split meets (`meets.json`)
 

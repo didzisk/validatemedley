@@ -16,6 +16,8 @@
         <Compile Include="AccessDbDump.fs" />
         <Compile Include="MeetConfig.fs" />
         <Compile Include="DbValidation.fs" />
+        <Compile Include="MedleyDommere.fs" />
+        <Compile Include="DommerParents.fs" />
         <None Include="meets.json" CopyToOutputDirectory="PreserveNewest" />
         <Compile Include="DownloadUtils.fs" />
         <Compile Include="StevneXml.fs" />

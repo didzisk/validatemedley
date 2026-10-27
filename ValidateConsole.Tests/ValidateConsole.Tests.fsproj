@@ -13,6 +13,8 @@
 
     <ItemGroup>
         <Compile Include="DbValidationTests.fs" />
+        <Compile Include="MedleyDommereTests.fs" />
+        <Compile Include="DommerParentsTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
