@@ -27,6 +27,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="CommandLineParser" Version="2.9.1" />
       <PackageReference Include="FSharp.Data" Version="6.6.0" />
       <PackageReference Include="System.Data.OleDb" Version="10.0.12" />
     </ItemGroup>

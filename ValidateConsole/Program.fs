@@ -1,18 +1,57 @@
+module Program
+
+open System
 open System.IO
-open DownloadUtils
+open CommandLine
 
-let [<Literal>] stevneFileName = "20260822Kolbotn_SkiSvOmmingRACUPSuperSprintStevne.xml"
+let [<Literal>] defaultVictoriaDir = @"D:\Victoria"
 
-let [<Literal>] targetDir = @"D:\training\StevneMedley"
+/// Victoria writes the meet's XML export to <victoria>\<stevnenr>\meetsetup.xml. Validating
+/// that file is the point - it is the copy that is about to be uploaded to medley.no.
+let [<Literal>] meetSetupFileName = "meetsetup.xml"
 
-//let [<Literal>] dbDir = @"D:\training\StevneMedley\DbCopy"
-let [<Literal>] dbDir = @"D:\Victoria"
+// CommandLineParser cannot bind an F# option - it hands the raw string to a TypeConverter for
+// FSharpOption<int> and throws. Nullable is its own idiom for "unset", so --meet uses that.
+[<Verb("xml", HelpText = "Validate the meetsetup.xml Victoria generated for a meet, before it is uploaded.")>]
+type XmlOptions =
+    { [<Option('v', "victoria", Default = defaultVictoriaDir, HelpText = "Victoria installation folder.")>]
+      Victoria: string
+      [<Option('m', "meet", HelpText = "Meet number (Stevnenr). Defaults to the most recent meet.")>]
+      Meet: Nullable<int> }
 
-let displayFunc (e: StevneXml.MeetSetup.Event, r:Result<StevneXml.MeetSetup.Event,string>) =
+[<Verb("db", HelpText = "Validate a meet setup straight from stevne.mdb.")>]
+type DbOptions =
+    { [<Option('v', "victoria", Default = defaultVictoriaDir, HelpText = "Victoria installation folder.")>]
+      Victoria: string
+      [<Option('m', "meet", HelpText = "Meet number (Stevnenr). Defaults to the most recent meet.")>]
+      Meet: Nullable<int> }
+
+[<Verb("dump", HelpText = "Dump the schema and sample rows of the Victoria databases.")>]
+type DumpOptions =
+    { [<Option('v', "victoria", Default = defaultVictoriaDir, HelpText = "Victoria installation folder.")>]
+      Victoria: string
+      [<Option('r', "rows", Default = 5, HelpText = "Sample rows to print per table.")>]
+      Rows: int }
+
+[<Verb("dommerforeldre", HelpText = "List entrants whose parent is a registered official. Needs network access to medley.no.")>]
+type DommerOptions =
+    { [<Option('v', "victoria", Default = defaultVictoriaDir, HelpText = "Victoria installation folder.")>]
+      Victoria: string
+      [<Option('m', "meet", HelpText = "Meet number (Stevnenr). Defaults to the most recent meet.")>]
+      Meet: Nullable<int> }
+
+let private stevneDb victoria = Path.Combine(victoria, "stevne.mdb")
+let private personDb victoria = Path.Combine(victoria, "person.mdb")
+
+let private resolveMeet (victoria: string) (meet: Nullable<int>) =
+    if meet.HasValue then meet.Value
+    else (AccessDb.withConnection (stevneDb victoria) DbValidation.latestMeet).Number
+
+let displayXmlResult (e: StevneXml.MeetSetup.Event, r: Result<StevneXml.MeetSetup.Event, string>) =
     match r with
-    | Ok a -> $"Ok."
+    | Ok _ -> "Ok."
     | Error errorValue -> errorValue
-    |> (printfn "%d. %s %A" e.EventNumber e.EventDescription)
+    |> printfn "%d. %s %s" e.EventNumber e.EventDescription
 
 let displayDbResult (e: DbValidation.DbEvent, r: Result<DbValidation.DbEvent, string>) =
     match r with
@@ -20,46 +59,49 @@ let displayDbResult (e: DbValidation.DbEvent, r: Result<DbValidation.DbEvent, st
     | Error errorValue -> errorValue
     |> printfn "%d. %s [%A] %s" e.EventNumber e.Description e.Round
 
-let runValidation () =
-    stevneFileName
-    |> parseFilename
-    |> printfn "%A"
+let runXml (o: XmlOptions) =
+    let meet = resolveMeet o.Victoria o.Meet
+    let dir = Path.Combine(o.Victoria, string meet)
 
-    getStevneoppsettFile targetDir stevneFileName
+    printfn "=== validation of %s ===" (Path.Combine(dir, meetSetupFileName))
+    ValidationMain.CheckMeetSetup dir meetSetupFileName
+    |> Seq.iter displayXmlResult
+    0
 
-    // ValidationMain.CheckMeetSetup  targetDir stevneFileName
-    // |> Seq.iter displayFunc
-
-    for db in [ "person.mdb"; "rekorder.mdb"; "stevne.mdb" ] do
-         AccessDbDump.dumpDatabase (Path.Combine(dbDir, db)) 5
-
+let runDb (o: DbOptions) =
     let splits = MeetConfig.load (MeetConfig.defaultPath ())
-
-    let meet, dbResults =
-        DbValidation.checkLatestMeetSetup splits (Path.Combine(dbDir, "stevne.mdb"))
+    let meet, results = DbValidation.checkMeetSetup splits (stevneDb o.Victoria) (resolveMeet o.Victoria o.Meet)
 
     printfn "=== validation straight from stevne.mdb: %d. %s (%s) ===" meet.Number meet.Name meet.Date
-    dbResults |> List.iter displayDbResult
+    results |> List.iter displayDbResult
+    0
+
+let runDump (o: DumpOptions) =
+    for db in [ "person.mdb"; "rekorder.mdb"; "stevne.mdb" ] do
+        AccessDbDump.dumpDatabase (Path.Combine(o.Victoria, db)) o.Rows
+    0
 
 /// Lists swimmers in a meet whose parent is a registered official. Fetches from medley.no,
 /// so it needs network; the meet number defaults to the most recently set up meet.
-let runDommerParents (meetNumber: int option) =
-    let stevneDb = Path.Combine(dbDir, "stevne.mdb")
-    let personDb = Path.Combine(dbDir, "person.mdb")
-
-    let meet =
-        match meetNumber with
-        | Some n -> n
-        | None -> (AccessDb.withConnection stevneDb DbValidation.latestMeet).Number
+let runDommerParents (o: DommerOptions) =
+    let meet = resolveMeet o.Victoria o.Meet
 
     printfn "=== dommerforeldre, stevne %d ===" meet
-    let matches, unknownClubs = DommerParents.findParents stevneDb personDb meet
+    let matches, unknownClubs = DommerParents.findParents (stevneDb o.Victoria) (personDb o.Victoria) meet
     DommerParents.printReport matches unknownClubs
+    0
 
-match System.Environment.GetCommandLineArgs() |> List.ofArray with
-| _ :: "dommerforeldre" :: rest ->
-    rest
-    |> List.tryHead
-    |> Option.map int
-    |> runDommerParents
-| _ -> runValidation ()
+[<EntryPoint>]
+let main argv =
+    let result =
+        Parser.Default.ParseArguments<XmlOptions, DbOptions, DumpOptions, DommerOptions>(argv)
+
+    match result with
+    | :? Parsed<obj> as parsed ->
+        match parsed.Value with
+        | :? XmlOptions as o -> runXml o
+        | :? DbOptions as o -> runDb o
+        | :? DumpOptions as o -> runDump o
+        | :? DommerOptions as o -> runDommerParents o
+        | other -> failwithf "Unhandled verb %A" other
+    | _ -> 1

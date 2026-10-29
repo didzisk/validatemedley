@@ -17,6 +17,27 @@ ValidateConsole.Tests\bin\Debug\net10.0\win-x86\ValidateConsole.Tests.exe
 D:\Tools\Rider\lib\ReSharperHost\windows-x64\dotnet\dotnet.exe run --project ValidateConsole
 ```
 
+### The CLI
+
+`Program.fs` is dispatch only - four verbs parsed by `CommandLineParser` 2.9.1, one per
+function area, each with its own `[<Verb>]` record:
+
+```
+ValidateConsole xml            [-v <dir>] [-m <nr>]    validate <dir>\<nr>\meetsetup.xml
+ValidateConsole db             [-v <dir>] [-m <nr>]    validate <dir>\stevne.mdb
+ValidateConsole dump           [-v <dir>] [-r <rows>]  dump the three .mdb files
+ValidateConsole dommerforeldre [-v <dir>] [-m <nr>]    parent report (needs network)
+```
+
+`-v|--victoria` is the Victoria installation folder, default `D:\Victoria`; the databases sit
+directly in it and each meet has a numbered subfolder. `-m|--meet` defaults to the most recent
+meet in `stevne.mdb`. No verb prints the verb list and exits 1.
+
+`--meet` is `Nullable<int>`, not `int option`: CommandLineParser hands the raw string to a
+TypeConverter for `FSharpOption<int>` and throws `NotSupportedException` at parse time. The
+record fields themselves bind fine - CommandLineParser builds immutable types through their
+constructor.
+
 `dotnet test --project ValidateConsole.Tests\ValidateConsole.Tests.fsproj` works too, against
 either host. Tests run on Microsoft.Testing.Platform (xunit v3). The opt-in is the `test`
 section of `global.json`; without it `dotnet test` starts VSTest, finds no adapter and
@@ -71,9 +92,10 @@ application"*. Only `Microsoft.Jet.OLEDB.4.0` reads it, and that provider exists
 Do not "clean up" the RuntimeIdentifier, and do not add ACE providers back as a fallback -
 they cannot ever succeed on these files. An `.accdb` would need ACE, but there are none.
 
-Databases live in `D:\training\StevneMedley\DbCopy`: `person.mdb` (clubs, countries),
-`rekorder.mdb` (records), `stevne.mdb` (meets). Opened with `Mode=Read`, which Jet honours -
-no `.ldb` lock files appear.
+Three databases sit directly in the Victoria folder (`-v`, default `D:\Victoria`):
+`person.mdb` (clubs, countries), `rekorder.mdb` (records), `stevne.mdb` (meets). A read-only
+copy is kept in `D:\training\StevneMedley\DbCopy`. Opened with `Mode=Read`, which Jet honours
+- no `.ldb` lock files appear.
 
 ## Modules (compile order matters in F#)
 
@@ -137,7 +159,7 @@ so the two paths stay comparable:
 
 ## Dommerforeldre - swimmers whose parent is an official
 
-`ValidateConsole.exe dommerforeldre [stevnenr]` lists, for one meet, every entrant who shares
+`ValidateConsole.exe dommerforeldre [-m <stevnenr>]` lists, for one meet, every entrant who shares
 a surname and a club with a registered swim official, together with that official's phone and
 email. The meet number defaults to the most recent. Output is printed only - it is personal
 contact data and must not be written into the repository.

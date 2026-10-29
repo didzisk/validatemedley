@@ -314,14 +314,9 @@ let private check (m: Meet) (split: MeetConfig.MeetSplit option) (events: DbEven
 let private checkAll (m: Meet) (split: MeetConfig.MeetSplit option) (events: DbEvent list) =
     events |> List.map (check m split events)
 
+/// Validates one meet, and reports which one that was so the caller can name it.
 let checkMeetSetup (splits: Map<int, MeetConfig.MeetSplit>) (dbPath: string) (meetNumber: int) =
     withConnection dbPath (fun conn ->
         match listMeets conn |> List.tryFind (fun m -> m.Number = meetNumber) with
         | None -> failwithf "No meet with Stevnenr %d in Stevnet" meetNumber
-        | Some meet -> readEvents conn meetNumber |> checkAll meet (splits |> Map.tryFind meetNumber))
-
-/// Validates the most recently set up meet, and reports which one that was.
-let checkLatestMeetSetup (splits: Map<int, MeetConfig.MeetSplit>) (dbPath: string) =
-    withConnection dbPath (fun conn ->
-        let meet = latestMeet conn
-        meet, readEvents conn meet.Number |> checkAll meet (splits |> Map.tryFind meet.Number))
+        | Some meet -> meet, readEvents conn meetNumber |> checkAll meet (splits |> Map.tryFind meetNumber))
